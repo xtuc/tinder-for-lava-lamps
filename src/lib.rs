@@ -6,6 +6,7 @@ use web_sys::{Document, Element, EventTarget};
 extern crate console_error_panic_hook;
 use js_sys::Math::random;
 use std::panic;
+use std::rc::Rc;
 
 lazy_static! {
     static ref LAMPS: Vec<String> = vec![
@@ -43,20 +44,25 @@ pub fn run() -> Result<(), JsValue> {
     let img = document.create_element("img")?;
     img.set_attribute("id", "img")?;
     app.append_child(&img)?;
-    draw_new_lamp(&img.clone());
+    draw_new_lamp(&img);
 
-    let img1 = img.clone();
-    let img2 = img.clone();
+    let img = Rc::new(img);
 
     add_vote_buttons(
         &document,
         &app,
-        Box::new(move || {
-            draw_new_lamp(&img1);
-        }),
-        Box::new(move || {
-            draw_new_lamp(&img2);
-        }),
+        {
+            let img = Rc::clone(&img);
+            Box::new(move || {
+                draw_new_lamp(&img);
+            })
+        },
+        {
+            let img = Rc::clone(&img);
+            Box::new(move || {
+                draw_new_lamp(&img);
+            })
+        },
     )?;
 
     Ok(())
