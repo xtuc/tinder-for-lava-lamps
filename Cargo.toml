@@ -26,5 +26,6 @@ features = [
   "HtmlElement",
   "EventListener",
   "Node",
-  "Window"
+  "Window",
+  "Response",
 ]

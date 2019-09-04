@@ -1,33 +1,14 @@
 use wasm_bindgen::prelude::*;
-#[macro_use]
-extern crate lazy_static;
 use wasm_bindgen::JsCast;
-use web_sys::{Document, Element, EventTarget};
+use web_sys::{Document, Element, EventTarget, Response};
 extern crate console_error_panic_hook;
-use js_sys::Math::random;
 use std::panic;
 use std::rc::Rc;
-
-lazy_static! {
-    static ref LAMPS: Vec<String> = vec![
-        // "https://s3.that-test.site/cdn-cgi/image/h=500/lava-lamps/1.png".to_string(),
-        "https://s3.that-test.site/cdn-cgi/image/h=500/lava-lamps/2.jpg".to_string(),
-        "https://s3.that-test.site/cdn-cgi/image/h=500/lava-lamps/3.jpg".to_string(),
-        "https://s3.that-test.site/cdn-cgi/image/h=500/lava-lamps/4.jpg".to_string(),
-        "https://s3.that-test.site/cdn-cgi/image/h=500/lava-lamps/5.jpg".to_string(),
-        "https://s3.that-test.site/cdn-cgi/image/h=500/lava-lamps/6.jpg".to_string(),
-    ];
-}
 
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = console)]
     fn log(s: &str);
-}
-
-pub fn get_random_lamp() -> String {
-    let i = (random() * 100 as f64) as usize;
-    return LAMPS[map_range((0, 100), (0, LAMPS.len()), i)].clone();
 }
 
 #[wasm_bindgen]
@@ -44,7 +25,7 @@ pub fn run() -> Result<(), JsValue> {
     let img = document.create_element("img")?;
     img.set_attribute("id", "img")?;
     app.append_child(&img)?;
-    draw_new_lamp(&img);
+    request(&img, "initial");
 
     let img = Rc::new(img);
 
@@ -54,13 +35,13 @@ pub fn run() -> Result<(), JsValue> {
         {
             let img = Rc::clone(&img);
             Box::new(move || {
-                draw_new_lamp(&img);
+                request(&img, "like");
             })
         },
         {
             let img = Rc::clone(&img);
             Box::new(move || {
-                draw_new_lamp(&img);
+                request(&img, "no");
             })
         },
     )?;
@@ -68,8 +49,31 @@ pub fn run() -> Result<(), JsValue> {
     Ok(())
 }
 
-pub fn draw_new_lamp(img: &Element) {
-    img.set_attribute("src", &get_random_lamp()).unwrap();
+fn request(img: &Element, endpoint: &str) {
+    let window = web_sys::window().unwrap();
+    let request_promise = window.fetch_with_str(&format!(
+        "https://tinder-for-lava-lamps.sven.workers.dev/{}",
+        endpoint
+    ));
+
+    let img_clone = img.clone();
+
+    let get_text = Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |text: JsValue| {
+        draw_new_lamp(&img_clone, text.as_string().unwrap());
+    }));
+
+    let cb = Closure::<dyn FnMut(JsValue)>::wrap(Box::new(move |value: JsValue| {
+        let resp: Response = value.dyn_into().unwrap();
+        resp.text().unwrap().then(&get_text);
+    }));
+
+    request_promise.then(&cb);
+
+    cb.forget();
+}
+
+pub fn draw_new_lamp(img: &Element, value: String) {
+    img.set_attribute("src", &value).unwrap();
 }
 
 pub fn add_vote_buttons(
@@ -107,8 +111,4 @@ pub fn set_onlick(element: Element, handler: Box<dyn Fn()>) {
     // important!
     // https://github.com/rustwasm/wasm-bindgen/blob/1f39a3045fcb652256797cde5a0aef8871fca74d/examples/closures/src/lib.rs#L75-L83
     callback.forget();
-}
-
-fn map_range(from_range: (usize, usize), to_range: (usize, usize), s: usize) -> usize {
-    to_range.0 + (s - from_range.0) * (to_range.1 - to_range.0) / (from_range.1 - from_range.0)
 }
